@@ -837,6 +837,13 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     });
     let collisionDebugBuilt = false;
     const clearCollisionDebug = () => {
+      for (const c of collisionDebugGroup.children) {
+        const m = c as THREE.Mesh;
+        if (m.userData?.["debugOwned"]) {
+          m.geometry?.dispose();
+          (m.material as THREE.Material)?.dispose();
+        }
+      }
       collisionDebugGroup.clear();
       collisionDebugBuilt = false;
     };
