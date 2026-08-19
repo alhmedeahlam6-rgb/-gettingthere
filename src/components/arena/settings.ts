@@ -288,6 +288,11 @@ export function defaultSettings(): ArenaSettings {
     renderScale: 1,
     particles: 1,
 
+    skyBrightness: 1.12,
+    fogIntensity: 0.85,
+    cloudMotion: 1,
+    groundBrightness: 1.25,
+
     quickMatch: false,
     autoFire: false,
     autoReload: true,
