@@ -317,6 +317,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     setSfxVolume(settings.masterVolume * settings.sfxVolume);
     setSfxMuted(settings.muted);
     applyFovRef.current(settings.fov);
+    applyAtmosphereRef.current(settings.skyBrightness, settings.fogIntensity, settings.cloudMotion);
   }, [settings]);
 
   /** shrinks the HUD on small / short (phone landscape) screens so it stops overlapping */
@@ -375,6 +376,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
   const countdownRef = useRef(0);
   const shakeRef = useRef(0);
   const applyFovRef = useRef<(fov: number) => void>(() => {});
+  /** live sky exposure / fog strength / cloud drift on outdoor maps */
+  const applyAtmosphereRef = useRef<(sky: number, fog: number, clouds: number) => void>(() => {});
   const sprintToggleRef = useRef(false);
   const useHealthKitRef = useRef<() => void>(() => {});
   /** the operative chosen in the lobby, plus their live ability state */
@@ -1880,13 +1883,20 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
      * lighting, so a painted sky + matching haze makes it read much brighter
      * without touching the light rig (one extra unlit draw call).
      */
+    const bootNum = (v: unknown, fallback: number) =>
+      typeof v === "number" && Number.isFinite(v) ? v : fallback;
+    const skyBrightness = bootNum(bootSettings.skyBrightness, 1.12);
+    const fogIntensity = bootNum(bootSettings.fogIntensity, 0.85);
+    const cloudMotion = bootNum(bootSettings.cloudMotion, 1);
+    const groundBrightness = bootNum(bootSettings.groundBrightness, 1.25);
+
     let skybox: Skybox | null = null;
     if (activeMap.id === "outpost") {
       skybox = addDaySkybox(scene, {
         radius: 900,
         textureSize: initialQuality === "low" ? 1024 : 2048,
-        brightness: bootSettings.skyBrightness,
-        cloudMotion: bootSettings.cloudMotion,
+        brightness: skyBrightness,
+        cloudMotion: cloudMotion,
       });
       scene.background = null;
       renderer.setClearColor(DAY_HORIZON, 1);
@@ -1911,11 +1921,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         dayFog.near = fogNear / Math.max(0.35, fog);
         dayFog.far = fogFar / Math.max(0.35, fog);
       };
-      applyAtmosphereRef.current(
-        bootSettings.skyBrightness,
-        bootSettings.fogIntensity,
-        bootSettings.cloudMotion,
-      );
+      applyAtmosphereRef.current(skyBrightness, fogIntensity, cloudMotion);
     }
 
     let boundsMinX = activeMap.bounds?.minX ?? -200;
@@ -1996,14 +2002,19 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         // Fold sky, sun and ambient occlusion into vertex colours once, then
         // draw the whole level unlit. Runs behind the deploy splash.
         if (bakedLight) {
+          // `groundBrightness` folds extra bounce/ambient light into the bake so
+          // the floor of the outdoor map stops reading as dark under the new sky.
+          const gb = groundBrightness;
           bakeVertexLighting(model, {
             sunDirection: sun.position.clone().negate(),
             sunColor: 0xffd9a0,
-            sunIntensity: 0.9,
+            sunIntensity: 0.9 * Math.min(1.3, gb),
             skyColor: 0x9fc6ff,
-            groundColor: 0x6f6255,
-            ambient: 0.66,
-            aoFloor: 0.36,
+            // warmer, lighter bounce colour scaled by the ground slider
+            groundColor: new THREE.Color(0x6f6255).multiplyScalar(Math.min(1.6, 1.18 * gb)),
+            ambient: Math.min(1.1, 0.66 * gb),
+            // less contact darkening on the floor
+            aoFloor: Math.min(0.7, 0.36 * gb),
           });
         }
 
