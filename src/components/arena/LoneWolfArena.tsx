@@ -1924,6 +1924,12 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
     const onPointerLockChange = () => {
       const locked = document.pointerLockElement === renderer.domElement;
+      if (locked && freeCursorRef.current) {
+        freeCursorRef.current = false;
+        setCursorFree(false);
+      }
+      // a deliberate cursor release keeps the match running — don't pause
+      if (freeCursorRef.current) return;
       if (modeRef.current === "walk" && !locked && matchRef.current.phase === "round" && !settingsOpenRef.current) {
         setPaused(true);
         suspendSfx();
