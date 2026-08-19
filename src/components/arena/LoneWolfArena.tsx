@@ -2208,9 +2208,18 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         });
         collisionTiles = buildCollisionTiles(collisionRoot ?? model, {
           tileSize: 32,
-          bounds: activeMap.bounds,
+          // pad the authored box so edge geometry (now reachable) still collides
+          bounds: activeMap.bounds
+            ? {
+                minX: activeMap.bounds.minX - 40,
+                maxX: activeMap.bounds.maxX + 40,
+                minZ: activeMap.bounds.minZ - 40,
+                maxZ: activeMap.bounds.maxZ + 40,
+              }
+            : null,
           regions: 2,
         });
+
         nearX = Infinity;
         nearZ = Infinity;
         nearFx = 0;
