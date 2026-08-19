@@ -449,6 +449,60 @@ export default function SettingsPanel({ settings, onChange, onClose }: Props) {
                 laptops smooth. Baked lighting pre-computes map light and shade once at load — much faster, but map
                 shadows stop moving.
               </p>
+
+              <div className="space-y-4 rounded-xl border border-border/70 bg-card/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Atmosphere — 4v4 outdoor map
+                </p>
+                <Row label="Sky brightness" value={`${Math.round(settings.skyBrightness * 100)}%`}>
+                  <input
+                    type="range"
+                    min={50}
+                    max={180}
+                    step={2}
+                    value={Math.round(settings.skyBrightness * 100)}
+                    onChange={(e) => set("skyBrightness", Number(e.target.value) / 100)}
+                    className={slider}
+                  />
+                </Row>
+                <Row label="Fog intensity" value={settings.fogIntensity <= 0.02 ? "Off" : `${Math.round(settings.fogIntensity * 100)}%`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={200}
+                    step={5}
+                    value={Math.round(settings.fogIntensity * 100)}
+                    onChange={(e) => set("fogIntensity", Number(e.target.value) / 100)}
+                    className={slider}
+                  />
+                </Row>
+                <Row label="Cloud drift" value={settings.cloudMotion <= 0 ? "Static" : `${Math.round(settings.cloudMotion * 100)}%`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={300}
+                    step={10}
+                    value={Math.round(settings.cloudMotion * 100)}
+                    onChange={(e) => set("cloudMotion", Number(e.target.value) / 100)}
+                    className={slider}
+                  />
+                </Row>
+                <Row label="Ground light (baked)" value={`${Math.round(settings.groundBrightness * 100)}%`}>
+                  <input
+                    type="range"
+                    min={60}
+                    max={180}
+                    step={5}
+                    value={Math.round(settings.groundBrightness * 100)}
+                    onChange={(e) => set("groundBrightness", Number(e.target.value) / 100)}
+                    className={slider}
+                  />
+                </Row>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  Sky, fog and clouds update live. Ground light is folded into the light bake, so it applies on the next
+                  match / reload — none of these change the map's real lighting rig.
+                </p>
+              </div>
             </section>
           )}
 
