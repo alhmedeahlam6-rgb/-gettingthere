@@ -428,3 +428,149 @@ export function suspendSfx() {
 export function resumeSfx() {
   if (ctx && ctx.state === "suspended") void ctx.resume();
 }
+
+/* ------------------------------------------------------------------ */
+/* Weather ambience (procedural — no extra downloads, no per-frame JS) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rain / wind beds are a single looping noise buffer through a filter, so the
+ * cost is one source node for as long as the weather lasts. Thunder is a
+ * short synthesised burst — nothing is fetched or decoded at runtime.
+ */
+
+let ambienceSrc: AudioBufferSourceNode | null = null;
+let ambienceGain: GainNode | null = null;
+let ambienceKind: "rain" | "snow" | null = null;
+let noiseBed: AudioBuffer | null = null;
+
+function bedBuffer(c: AudioContext) {
+  if (noiseBed) return noiseBed;
+  const len = Math.floor(c.sampleRate * 4);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) {
+    const white = Math.random() * 2 - 1;
+    last = last * 0.86 + white * 0.14; // pink-ish
+    d[i] = last * 2.2 + white * 0.35;
+  }
+  // crossfade the seam so the loop is inaudible
+  const fade = Math.floor(c.sampleRate * 0.05);
+  for (let i = 0; i < fade; i++) {
+    const t = i / fade;
+    d[i] = d[i]! * t + d[len - fade + i]! * (1 - t);
+  }
+  noiseBed = buf;
+  return buf;
+}
+
+/** Start/stop the weather bed. Pass null to fade the current one out. */
+export function setWeatherAmbience(kind: "rain" | "snow" | null, volume = 0.35) {
+  if (!ctx || !master) return;
+  if (kind === ambienceKind) {
+    if (ambienceGain) ambienceGain.gain.setTargetAtTime(kind ? volume : 0, ctx.currentTime, 1.2);
+    return;
+  }
+  const now = ctx.currentTime;
+  if (ambienceSrc && ambienceGain) {
+    const oldSrc = ambienceSrc;
+    const oldGain = ambienceGain;
+    oldGain.gain.cancelScheduledValues(now);
+    oldGain.gain.setTargetAtTime(0, now, 0.8);
+    window.setTimeout(() => {
+      try {
+        oldSrc.stop();
+      } catch {
+        /* already stopped */
+      }
+      oldSrc.disconnect();
+      oldGain.disconnect();
+    }, 3500);
+  }
+  ambienceSrc = null;
+  ambienceGain = null;
+  ambienceKind = kind;
+  if (!kind) return;
+
+  const src = ctx.createBufferSource();
+  src.buffer = bedBuffer(ctx);
+  src.loop = true;
+  const filter = ctx.createBiquadFilter();
+  if (kind === "rain") {
+    filter.type = "bandpass";
+    filter.frequency.value = 1400;
+    filter.Q.value = 0.5;
+  } else {
+    filter.type = "lowpass";
+    filter.frequency.value = 420;
+    filter.Q.value = 0.7;
+  }
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  g.gain.setTargetAtTime(volume, now, 2.0); // weather rolls in slowly
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(master);
+  src.start();
+  ambienceSrc = src;
+  ambienceGain = g;
+}
+
+/** Thunder clap — synthesised rumble, scheduled `delay` seconds from now. */
+export function playThunder(delay = 0, volume = 0.7) {
+  if (!ctx || !master || muted) return;
+  const start = ctx.currentTime + Math.max(0, delay);
+  const dur = 2.4 + Math.random() * 1.6;
+
+  const src = ctx.createBufferSource();
+  src.buffer = bedBuffer(ctx);
+  src.loop = true;
+  src.playbackRate.value = 0.6 + Math.random() * 0.25;
+
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(1600, start);
+  lp.frequency.exponentialRampToValueAtTime(110, start + dur);
+  lp.Q.value = 0.6;
+
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.02, volume), start + 0.05);
+  g.gain.exponentialRampToValueAtTime(0.22 * volume, start + 0.5);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+
+  // sub rumble under the crack
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(58, start);
+  osc.frequency.exponentialRampToValueAtTime(26, start + dur);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.0001, start);
+  og.gain.exponentialRampToValueAtTime(0.35 * volume, start + 0.12);
+  og.gain.exponentialRampToValueAtTime(0.0001, start + dur * 0.8);
+
+  src.connect(lp);
+  lp.connect(g);
+  g.connect(master);
+  osc.connect(og);
+  og.connect(master);
+  src.start(start);
+  src.stop(start + dur + 0.1);
+  osc.start(start);
+  osc.stop(start + dur + 0.1);
+  src.onended = () => {
+    src.disconnect();
+    lp.disconnect();
+    g.disconnect();
+  };
+  osc.onended = () => {
+    osc.disconnect();
+    og.disconnect();
+  };
+}
+
+/** Hard stop (map unload / unmount). */
+export function stopWeatherAmbience() {
+  setWeatherAmbience(null);
+}
