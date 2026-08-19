@@ -290,6 +290,15 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
   const targetProbeRef = useRef(0);
   const [scoped, setScoped] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** wireframe overlay of the real collision geometry (debug invisible walls) */
+  const [collisionDebug, setCollisionDebug] = useState(false);
+  const setCollisionDebugRef = useRef<(on: boolean) => void>(() => {});
+  const toggleCollisionDebugRef = useRef(() => {});
+  toggleCollisionDebugRef.current = () => setCollisionDebug((v) => !v);
+  /** cursor released on purpose — the game keeps running, no pause */
+  const [cursorFree, setCursorFree] = useState(false);
+  const freeCursorRef = useRef(false);
+  const toggleCursorRef = useRef(() => {});
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [prone, setProne] = useState(false);
