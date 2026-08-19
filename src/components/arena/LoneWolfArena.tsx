@@ -295,6 +295,9 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
   const setCollisionDebugRef = useRef<(on: boolean) => void>(() => {});
   const toggleCollisionDebugRef = useRef(() => {});
   toggleCollisionDebugRef.current = () => setCollisionDebug((v) => !v);
+  /** why movement got blocked this frame (debug only): bounds box, spawn cage, geometry */
+  const blockReasonRef = useRef("");
+  const [blockReason, setBlockReason] = useState("");
   /** cursor released on purpose — the game keeps running, no pause */
   const [cursorFree, setCursorFree] = useState(false);
   const freeCursorRef = useRef(false);
@@ -337,6 +340,12 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
   useEffect(() => {
     setCollisionDebugRef.current(collisionDebug);
+    if (!collisionDebug) {
+      setBlockReason("");
+      return;
+    }
+    const id = window.setInterval(() => setBlockReason(blockReasonRef.current), 150);
+    return () => window.clearInterval(id);
   }, [collisionDebug]);
 
   useEffect(() => {
@@ -828,6 +837,13 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     });
     let collisionDebugBuilt = false;
     const clearCollisionDebug = () => {
+      for (const c of collisionDebugGroup.children) {
+        const m = c as THREE.Mesh;
+        if (m.userData?.["debugOwned"]) {
+          m.geometry?.dispose();
+          (m.material as THREE.Material)?.dispose();
+        }
+      }
       collisionDebugGroup.clear();
       collisionDebugBuilt = false;
     };
@@ -845,6 +861,46 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         wire.matrixWorldNeedsUpdate = true;
         collisionDebugGroup.add(wire);
       }
+      // The hard map-bounds box and the buy-phase spawn cage are pure maths —
+      // no geometry — so they are the classic "invisible wall in the middle of
+      // nowhere". Draw them too, in different colours.
+      const boundsBox = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(0.1, boundsMaxX - boundsMinX),
+          14,
+          Math.max(0.1, boundsMaxZ - boundsMinZ),
+        ),
+        new THREE.MeshBasicMaterial({
+          color: 0xff3d81,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.35,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      boundsBox.position.set((boundsMinX + boundsMaxX) / 2, 6, (boundsMinZ + boundsMaxZ) / 2);
+      boundsBox.userData["debugOwned"] = true;
+      collisionDebugGroup.add(boundsBox);
+
+      const cage = spawnCageRef.current;
+      if (cage) {
+        const cageBox = new THREE.Mesh(
+          new THREE.BoxGeometry(cage.halfX * 2, SPAWN_BOX_HEIGHT, cage.halfZ * 2),
+          new THREE.MeshBasicMaterial({
+            color: 0xffd23d,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.4,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        cageBox.position.set(cage.center.x, cage.center.y + SPAWN_BOX_HEIGHT / 2, cage.center.z);
+        cageBox.userData["debugOwned"] = true;
+        collisionDebugGroup.add(cageBox);
+      }
+
       collisionDebugBuilt = true;
     };
     setCollisionDebugRef.current = (on: boolean) => {
@@ -2787,14 +2843,24 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
           }
 
 
+          const preClampX = walkPos.x;
+          const preClampZ = walkPos.z;
           walkPos.x = Math.max(boundsMinX, Math.min(boundsMaxX, walkPos.x));
           walkPos.z = Math.max(boundsMinZ, Math.min(boundsMaxZ, walkPos.z));
+          blockReasonRef.current =
+            Math.abs(preClampX - walkPos.x) > 1e-4 || Math.abs(preClampZ - walkPos.z) > 1e-4
+              ? "map bounds box"
+              : "";
 
           // during the buy phase you are locked inside your spawn cage
           const cage = spawnCageRef.current;
           if (matchRef.current.phase === "countdown" && cage) {
+            const cageX = walkPos.x;
+            const cageZ = walkPos.z;
             walkPos.x = Math.max(cage.center.x - cage.halfX, Math.min(cage.center.x + cage.halfX, walkPos.x));
             walkPos.z = Math.max(cage.center.z - cage.halfZ, Math.min(cage.center.z + cage.halfZ, walkPos.z));
+            if (Math.abs(cageX - walkPos.x) > 1e-4 || Math.abs(cageZ - walkPos.z) > 1e-4)
+              blockReasonRef.current = "spawn cage (buy phase)";
 
             const ceil = cage.center.y + SPAWN_BOX_HEIGHT - eyeHeight();
             if (walkPos.y > ceil) {
@@ -3290,6 +3356,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
       {collisionDebug && mode === "walk" && (
         <div className="pointer-events-none absolute left-1/2 top-12 z-40 -translate-x-1/2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200 backdrop-blur">
           Collision debug on (F9)
+          {blockReason ? ` · blocked by ${blockReason}` : " · pink box = map bounds, yellow = spawn cage"}
         </div>
       )}
 
