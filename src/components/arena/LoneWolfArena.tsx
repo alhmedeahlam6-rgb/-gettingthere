@@ -1891,6 +1891,11 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     const cloudMotion = bootNum(bootSettings.cloudMotion, 1);
     const groundBrightness = bootNum(bootSettings.groundBrightness, 1.25);
 
+    const skyBrightnessRef = { current: skyBrightness };
+    const fogIntensityRef = { current: fogIntensity };
+    const WET_HORIZON = new THREE.Color(0x8f9aa6);
+    let weatherWet = 0;
+
     let skybox: Skybox | null = null;
     let weather: Weather | null = null;
     let weatherApply: ((flash: number, wet: number) => void) | null = null;
