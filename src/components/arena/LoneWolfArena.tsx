@@ -12,7 +12,7 @@ import {
   type CollisionTile,
 } from "./collision";
 
-import { Skull, Volume2, VolumeX, Maximize, Minimize, Settings, PawPrint, Wifi, Eye, Smile } from "lucide-react";
+import { Skull, Volume2, VolumeX, Maximize, Minimize, Settings, PawPrint, Wifi, Eye, Smile, Boxes, MousePointer2 } from "lucide-react";
 import { createSpawnFx, type SpawnFx } from "./spawnFx";
 import { createPowerFx } from "./powerFx";
 import { bakeVertexLighting, makeBlobShadowTexture } from "./bakeLighting";
@@ -290,6 +290,15 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
   const targetProbeRef = useRef(0);
   const [scoped, setScoped] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** wireframe overlay of the real collision geometry (debug invisible walls) */
+  const [collisionDebug, setCollisionDebug] = useState(false);
+  const setCollisionDebugRef = useRef<(on: boolean) => void>(() => {});
+  const toggleCollisionDebugRef = useRef(() => {});
+  toggleCollisionDebugRef.current = () => setCollisionDebug((v) => !v);
+  /** cursor released on purpose — the game keeps running, no pause */
+  const [cursorFree, setCursorFree] = useState(false);
+  const freeCursorRef = useRef(false);
+  const toggleCursorRef = useRef(() => {});
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [prone, setProne] = useState(false);
@@ -312,6 +321,23 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     setSettings(loaded);
     setMuted(loaded.muted);
   }, []);
+
+  toggleCursorRef.current = () => {
+    const canvas = mountRef.current?.querySelector("canvas");
+    if (document.pointerLockElement === canvas) {
+      freeCursorRef.current = true;
+      setCursorFree(true);
+      document.exitPointerLock?.();
+    } else {
+      freeCursorRef.current = false;
+      setCursorFree(false);
+      canvas?.requestPointerLock?.();
+    }
+  };
+
+  useEffect(() => {
+    setCollisionDebugRef.current(collisionDebug);
+  }, [collisionDebug]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -784,6 +810,48 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     };
 
 
+
+    /* ---- collision debug overlay ------------------------------------------
+     * Draws the *actual* collision geometry (the merged/tiled proxy the movement
+     * probes hit) as a wireframe, so invisible walls become visible. Built once
+     * on enable, torn down on disable — zero cost while it's off. Geometry is
+     * shared with the colliders, so nothing extra is uploaded to the GPU. */
+    const collisionDebugGroup = new THREE.Group();
+    collisionDebugGroup.visible = false;
+    scene.add(collisionDebugGroup);
+    const collisionDebugMat = new THREE.MeshBasicMaterial({
+      color: 0x39ff9c,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    });
+    let collisionDebugBuilt = false;
+    const clearCollisionDebug = () => {
+      collisionDebugGroup.clear();
+      collisionDebugBuilt = false;
+    };
+    const buildCollisionDebug = () => {
+      clearCollisionDebug();
+      const seen = new Set<THREE.Mesh>();
+      for (const t of collisionTiles) seen.add(t.mesh);
+      for (const m of collidersRef.current) seen.add(m);
+      for (const m of seen) {
+        if (!m.geometry) continue;
+        m.updateWorldMatrix(true, false);
+        const wire = new THREE.Mesh(m.geometry, collisionDebugMat);
+        wire.matrixAutoUpdate = false;
+        wire.matrix.copy(m.matrixWorld);
+        wire.matrixWorldNeedsUpdate = true;
+        collisionDebugGroup.add(wire);
+      }
+      collisionDebugBuilt = true;
+    };
+    setCollisionDebugRef.current = (on: boolean) => {
+      if (on) buildCollisionDebug();
+      if (!on) clearCollisionDebug();
+      collisionDebugGroup.visible = on;
+    };
 
     const enemyMeshes = (team: Team) =>
       fighters.filter((f) => f.team !== team && f.alive && f.group).flatMap((f) => f.meshes);
@@ -1817,6 +1885,17 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space" && modeRef.current === "walk") e.preventDefault();
+      // ` releases / re-grabs the mouse without pausing, F9 toggles collision wireframes
+      if (e.code === "Backquote") {
+        e.preventDefault();
+        toggleCursorRef.current();
+        return;
+      }
+      if (e.code === "F9") {
+        e.preventDefault();
+        toggleCollisionDebugRef.current();
+        return;
+      }
       keys.add(e.code);
     };
     const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
@@ -1845,6 +1924,12 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
     const onPointerLockChange = () => {
       const locked = document.pointerLockElement === renderer.domElement;
+      if (locked && freeCursorRef.current) {
+        freeCursorRef.current = false;
+        setCursorFree(false);
+      }
+      // a deliberate cursor release keeps the match running — don't pause
+      if (freeCursorRef.current) return;
       if (modeRef.current === "walk" && !locked && matchRef.current.phase === "round" && !settingsOpenRef.current) {
         setPaused(true);
         suspendSfx();
@@ -3196,6 +3281,19 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         </div>
       )}
 
+      {cursorFree && mode === "walk" && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-full border border-white/20 bg-black/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/80 backdrop-blur">
+          Mouse released · press ` or click the arena to aim again
+        </div>
+      )}
+
+      {collisionDebug && mode === "walk" && (
+        <div className="pointer-events-none absolute left-1/2 top-12 z-40 -translate-x-1/2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200 backdrop-blur">
+          Collision debug on (F9)
+        </div>
+      )}
+
+
       {status && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs uppercase tracking-[0.3em] text-muted-foreground">
           {status}
@@ -3273,6 +3371,28 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
               }}
             >
               <Settings className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label={cursorFree ? "Grab mouse" : "Release mouse"}
+              title="Release / grab mouse (`)"
+              className={`pointer-events-auto rounded-md p-0.5 transition hover:text-white ${
+                cursorFree ? "text-[var(--hud-accent)]" : ""
+              }`}
+              onClick={() => toggleCursorRef.current()}
+            >
+              <MousePointer2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Toggle collision debug"
+              title="Show collision geometry (F9)"
+              className={`pointer-events-auto rounded-md p-0.5 transition hover:text-white ${
+                collisionDebug ? "text-emerald-400" : ""
+              }`}
+              onClick={() => setCollisionDebug((v) => !v)}
+            >
+              <Boxes className="h-4 w-4" />
             </button>
             <PawPrint className="h-4 w-4" />
             <span className="flex items-center gap-1 text-[9px] font-semibold tabular-nums">
