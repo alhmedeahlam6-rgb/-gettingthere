@@ -2855,8 +2855,12 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
           // during the buy phase you are locked inside your spawn cage
           const cage = spawnCageRef.current;
           if (matchRef.current.phase === "countdown" && cage) {
+            const cageX = walkPos.x;
+            const cageZ = walkPos.z;
             walkPos.x = Math.max(cage.center.x - cage.halfX, Math.min(cage.center.x + cage.halfX, walkPos.x));
             walkPos.z = Math.max(cage.center.z - cage.halfZ, Math.min(cage.center.z + cage.halfZ, walkPos.z));
+            if (Math.abs(cageX - walkPos.x) > 1e-4 || Math.abs(cageZ - walkPos.z) > 1e-4)
+              blockReasonRef.current = "spawn cage (buy phase)";
 
             const ceil = cage.center.y + SPAWN_BOX_HEIGHT - eyeHeight();
             if (walkPos.y > ceil) {
@@ -3352,6 +3356,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
       {collisionDebug && mode === "walk" && (
         <div className="pointer-events-none absolute left-1/2 top-12 z-40 -translate-x-1/2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200 backdrop-blur">
           Collision debug on (F9)
+          {blockReason ? ` · blocked by ${blockReason}` : " · pink box = map bounds, yellow = spawn cage"}
         </div>
       )}
 
