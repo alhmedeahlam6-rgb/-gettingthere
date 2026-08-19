@@ -360,6 +360,10 @@ export function loadSettings(): ArenaSettings {
     merged.bakedLight = bool(merged.bakedLight, base.bakedLight);
     merged.renderScale = num(merged.renderScale, 1, 0.5, 1);
     merged.particles = num(merged.particles, 1, 0, 1.5);
+    merged.skyBrightness = num(merged.skyBrightness, base.skyBrightness, 0.5, 1.8);
+    merged.fogIntensity = num(merged.fogIntensity, base.fogIntensity, 0, 2);
+    merged.cloudMotion = num(merged.cloudMotion, base.cloudMotion, 0, 3);
+    merged.groundBrightness = num(merged.groundBrightness, base.groundBrightness, 0.6, 1.8);
 
     merged.quickMatch = bool(merged.quickMatch, false);
     merged.autoFire = bool(merged.autoFire, false);
