@@ -1885,13 +1885,36 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
       skybox = addDaySkybox(scene, {
         radius: 900,
         textureSize: initialQuality === "low" ? 1024 : 2048,
+        brightness: bootSettings.skyBrightness,
+        cloudMotion: bootSettings.cloudMotion,
       });
       scene.background = null;
       renderer.setClearColor(DAY_HORIZON, 1);
-      scene.fog = new THREE.Fog(
-        DAY_HORIZON,
-        initialQuality === "low" ? 150 : 200,
-        initialQuality === "low" ? 480 : 700,
+      const fogNear = initialQuality === "low" ? 150 : 200;
+      const fogFar = initialQuality === "low" ? 480 : 700;
+      const dayFog = new THREE.Fog(DAY_HORIZON, fogNear, fogFar);
+      scene.fog = dayFog;
+
+      /**
+       * Live atmosphere tuning from the settings panel — sky exposure, haze
+       * strength and cloud drift all apply instantly, no reload needed.
+       */
+      applyAtmosphereRef.current = (sky, fog, clouds) => {
+        skybox?.setBrightness(sky);
+        skybox?.setCloudMotion(clouds);
+        if (fog <= 0.02) {
+          scene.fog = null;
+          return;
+        }
+        scene.fog = dayFog;
+        // more intensity = haze starts sooner and closes in faster
+        dayFog.near = fogNear / Math.max(0.35, fog);
+        dayFog.far = fogFar / Math.max(0.35, fog);
+      };
+      applyAtmosphereRef.current(
+        bootSettings.skyBrightness,
+        bootSettings.fogIntensity,
+        bootSettings.cloudMotion,
       );
     }
 
