@@ -854,6 +854,44 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         wire.matrixWorldNeedsUpdate = true;
         collisionDebugGroup.add(wire);
       }
+      // The hard map-bounds box and the buy-phase spawn cage are pure maths —
+      // no geometry — so they are the classic "invisible wall in the middle of
+      // nowhere". Draw them too, in different colours.
+      const boundsBox = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(0.1, boundsMaxX - boundsMinX),
+          14,
+          Math.max(0.1, boundsMaxZ - boundsMinZ),
+        ),
+        new THREE.MeshBasicMaterial({
+          color: 0xff3d81,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.35,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      boundsBox.position.set((boundsMinX + boundsMaxX) / 2, 6, (boundsMinZ + boundsMaxZ) / 2);
+      collisionDebugGroup.add(boundsBox);
+
+      const cage = spawnCageRef.current;
+      if (cage) {
+        const cageBox = new THREE.Mesh(
+          new THREE.BoxGeometry(cage.halfX * 2, SPAWN_BOX_HEIGHT, cage.halfZ * 2),
+          new THREE.MeshBasicMaterial({
+            color: 0xffd23d,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.4,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        cageBox.position.set(cage.center.x, cage.center.y + SPAWN_BOX_HEIGHT / 2, cage.center.z);
+        collisionDebugGroup.add(cageBox);
+      }
+
       collisionDebugBuilt = true;
     };
     setCollisionDebugRef.current = (on: boolean) => {
