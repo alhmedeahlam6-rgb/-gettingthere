@@ -1885,6 +1885,17 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space" && modeRef.current === "walk") e.preventDefault();
+      // ` releases / re-grabs the mouse without pausing, F9 toggles collision wireframes
+      if (e.code === "Backquote") {
+        e.preventDefault();
+        toggleCursorRef.current();
+        return;
+      }
+      if (e.code === "F9") {
+        e.preventDefault();
+        toggleCollisionDebugRef.current();
+        return;
+      }
       keys.add(e.code);
     };
     const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code);
