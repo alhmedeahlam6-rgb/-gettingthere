@@ -18,6 +18,7 @@ import { createPowerFx } from "./powerFx";
 import { bakeVertexLighting, makeBlobShadowTexture } from "./bakeLighting";
 import { loadCharacter } from "./characters";
 import { NO_EFFECT, POWERS } from "./powers";
+import { addDaySkybox, DAY_HORIZON, type Skybox } from "./skybox";
 import { createImpactFx, type ImpactFx } from "./impactFx";
 import { ARENA_MAPS, type MapId } from "./maps";
 import { saveMatchResult, getLeaderboard } from "@/lib/arena.functions";
