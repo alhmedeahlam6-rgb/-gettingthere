@@ -2208,9 +2208,18 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         });
         collisionTiles = buildCollisionTiles(collisionRoot ?? model, {
           tileSize: 32,
-          bounds: activeMap.bounds,
+          // pad the authored box so edge geometry (now reachable) still collides
+          bounds: activeMap.bounds
+            ? {
+                minX: activeMap.bounds.minX - 40,
+                maxX: activeMap.bounds.maxX + 40,
+                minZ: activeMap.bounds.minZ - 40,
+                maxZ: activeMap.bounds.maxZ + 40,
+              }
+            : null,
           regions: 2,
         });
+
         nearX = Infinity;
         nearZ = Infinity;
         nearFx = 0;
@@ -2228,15 +2237,56 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         }
 
 
+        // Real walkable footprint: the authored bounds box was hand-tuned and
+        // sits well inside the actual ground, which fenced off ~10% of the map
+        // on every side. Measure the ground/geometry extent from the level
+        // itself (vertices near play height) and use that as the hard barrier.
+        let fpMinX = Infinity;
+        let fpMaxX = -Infinity;
+        let fpMinZ = Infinity;
+        let fpMaxZ = -Infinity;
+        {
+          const v = new THREE.Vector3();
+          for (const m of colliders) {
+            const pos = m.geometry.getAttribute("position");
+            if (!pos) continue;
+            m.updateWorldMatrix(true, false);
+            const step = pos.count > 60000 ? 3 : 1;
+            for (let i = 0; i < pos.count; i += step) {
+              v.fromBufferAttribute(pos as THREE.BufferAttribute, i).applyMatrix4(m.matrixWorld);
+              if (v.y < -5 || v.y > 12) continue; // ignore skybox / roofs / pits
+              if (v.x < fpMinX) fpMinX = v.x;
+              if (v.x > fpMaxX) fpMaxX = v.x;
+              if (v.z < fpMinZ) fpMinZ = v.z;
+              if (v.z > fpMaxZ) fpMaxZ = v.z;
+            }
+          }
+        }
+        const footprintOk =
+          Number.isFinite(fpMinX) && fpMaxX - fpMinX > 10 && fpMaxZ - fpMinZ > 10;
+        if (footprintOk) {
+          const INSET = 1.5; // stop just short of the ground edge
+          boundsMinX = fpMinX + INSET;
+          boundsMaxX = fpMaxX - INSET;
+          boundsMinZ = fpMinZ + INSET;
+          boundsMaxZ = fpMaxZ - INSET;
+        }
+
         // Radar footprint: sample every vertex of the level between knee and
         // roof height into a top-down occupancy grid. The GLB batches whole
         // areas into single meshes, so per-mesh bounds are useless here.
         {
           const RES = 128;
-          const b = activeMap.bounds;
-          const EXT = b
-            ? Math.max(Math.abs(b.minX), Math.abs(b.maxX), Math.abs(b.minZ), Math.abs(b.maxZ))
-            : 78;
+          const EXT = footprintOk
+            ? Math.max(Math.abs(boundsMinX), Math.abs(boundsMaxX), Math.abs(boundsMinZ), Math.abs(boundsMaxZ))
+            : activeMap.bounds
+              ? Math.max(
+                  Math.abs(activeMap.bounds.minX),
+                  Math.abs(activeMap.bounds.maxX),
+                  Math.abs(activeMap.bounds.minZ),
+                  Math.abs(activeMap.bounds.maxZ),
+                )
+              : 78;
           const cells = new Uint8Array(RES * RES);
           const v = new THREE.Vector3();
           for (const m of colliders) {
@@ -2258,17 +2308,19 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
           mapGridRef.current = { cells, res: RES, extent: EXT };
         }
 
+
         const box = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
         box.getSize(size);
-        if (!activeMap.bounds) {
+        if (!activeMap.bounds && !footprintOk) {
           const lim = Math.max(size.x, size.z) / 2 - 2;
           boundsMinX = -lim;
           boundsMaxX = lim;
           boundsMinZ = -lim;
           boundsMaxZ = lim;
         }
-        if (activeMap.bounds) {
+        if (activeMap.bounds || footprintOk) {
+
           radius = Math.max(boundsMaxX - boundsMinX, boundsMaxZ - boundsMinZ) * 0.8;
           target.set((boundsMinX + boundsMaxX) / 2, 6, (boundsMinZ + boundsMaxZ) / 2);
         } else {
