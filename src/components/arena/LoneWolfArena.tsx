@@ -340,6 +340,12 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
   useEffect(() => {
     setCollisionDebugRef.current(collisionDebug);
+    if (!collisionDebug) {
+      setBlockReason("");
+      return;
+    }
+    const id = window.setInterval(() => setBlockReason(blockReasonRef.current), 150);
+    return () => window.clearInterval(id);
   }, [collisionDebug]);
 
   useEffect(() => {
