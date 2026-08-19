@@ -811,6 +811,48 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
 
 
+    /* ---- collision debug overlay ------------------------------------------
+     * Draws the *actual* collision geometry (the merged/tiled proxy the movement
+     * probes hit) as a wireframe, so invisible walls become visible. Built once
+     * on enable, torn down on disable — zero cost while it's off. Geometry is
+     * shared with the colliders, so nothing extra is uploaded to the GPU. */
+    const collisionDebugGroup = new THREE.Group();
+    collisionDebugGroup.visible = false;
+    scene.add(collisionDebugGroup);
+    const collisionDebugMat = new THREE.MeshBasicMaterial({
+      color: 0x39ff9c,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    });
+    let collisionDebugBuilt = false;
+    const clearCollisionDebug = () => {
+      collisionDebugGroup.clear();
+      collisionDebugBuilt = false;
+    };
+    const buildCollisionDebug = () => {
+      clearCollisionDebug();
+      const seen = new Set<THREE.Mesh>();
+      for (const t of collisionTiles) seen.add(t.mesh);
+      for (const m of collidersRef.current) seen.add(m);
+      for (const m of seen) {
+        if (!m.geometry) continue;
+        m.updateWorldMatrix(true, false);
+        const wire = new THREE.Mesh(m.geometry, collisionDebugMat);
+        wire.matrixAutoUpdate = false;
+        wire.matrix.copy(m.matrixWorld);
+        wire.matrixWorldNeedsUpdate = true;
+        collisionDebugGroup.add(wire);
+      }
+      collisionDebugBuilt = true;
+    };
+    setCollisionDebugRef.current = (on: boolean) => {
+      if (on && !collisionDebugBuilt) buildCollisionDebug();
+      if (!on) clearCollisionDebug();
+      collisionDebugGroup.visible = on;
+    };
+
     const enemyMeshes = (team: Team) =>
       fighters.filter((f) => f.team !== team && f.alive && f.group).flatMap((f) => f.meshes);
 
