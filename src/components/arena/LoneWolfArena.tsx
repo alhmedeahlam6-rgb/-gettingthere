@@ -295,6 +295,9 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
   const setCollisionDebugRef = useRef<(on: boolean) => void>(() => {});
   const toggleCollisionDebugRef = useRef(() => {});
   toggleCollisionDebugRef.current = () => setCollisionDebug((v) => !v);
+  /** why movement got blocked this frame (debug only): bounds box, spawn cage, geometry */
+  const blockReasonRef = useRef("");
+  const [blockReason, setBlockReason] = useState("");
   /** cursor released on purpose — the game keeps running, no pause */
   const [cursorFree, setCursorFree] = useState(false);
   const freeCursorRef = useRef(false);
