@@ -3359,6 +3359,28 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
             >
               <Settings className="h-4 w-4" />
             </button>
+            <button
+              type="button"
+              aria-label={cursorFree ? "Grab mouse" : "Release mouse"}
+              title="Release / grab mouse (`)"
+              className={`pointer-events-auto rounded-md p-0.5 transition hover:text-white ${
+                cursorFree ? "text-[var(--hud-accent)]" : ""
+              }`}
+              onClick={() => toggleCursorRef.current()}
+            >
+              <MousePointer2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Toggle collision debug"
+              title="Show collision geometry (F9)"
+              className={`pointer-events-auto rounded-md p-0.5 transition hover:text-white ${
+                collisionDebug ? "text-emerald-400" : ""
+              }`}
+              onClick={() => setCollisionDebug((v) => !v)}
+            >
+              <Boxes className="h-4 w-4" />
+            </button>
             <PawPrint className="h-4 w-4" />
             <span className="flex items-center gap-1 text-[9px] font-semibold tabular-nums">
               <Wifi className="h-4 w-4" />
