@@ -2891,6 +2891,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
     return () => {
       disposed = true;
+      skybox?.dispose();
+      skybox = null;
       cancelWarm?.();
       cancelWarm = null;
       cancelAnimationFrame(raf);
