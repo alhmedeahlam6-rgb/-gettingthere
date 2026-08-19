@@ -4,9 +4,12 @@
  * The levels ship with baked lighting, so we can't brighten them with more
  * real-time lights without paying for extra shading. Instead we wrap the map
  * in a very large inverted sphere painted with a canvas-generated day sky
- * (zenith blue → warm horizon haze, a sun glow and a few soft clouds). It is
- * a single unlit draw call: zero lighting cost, but it lifts the whole scene
- * because the horizon, fog colour and reflections all read as daylight.
+ * (zenith blue → warm horizon haze plus a sun glow), and a second, slightly
+ * smaller transparent sphere carrying soft clouds that drifts slowly around
+ * the map so the sky never looks frozen.
+ *
+ * Two unlit draw calls, no lighting cost — but the horizon, fog colour and
+ * overall exposure all read as daylight.
  */
 import * as THREE from "three";
 
@@ -66,20 +69,32 @@ function makeSkyTexture(palette: SkyPalette, size: number): THREE.Texture {
   ctx.arc(sunX, sunY, h * 0.022, 0, Math.PI * 2);
   ctx.fill();
 
-  // soft cumulus band — cheap blobby clouds, densest near the horizon
-  let seed = 20260819;
+  return finishTexture(canvas);
+}
+
+/** transparent equirect cloud sheet — drawn on its own drifting sphere */
+function makeCloudTexture(size: number, seedValue: number, density: number): THREE.Texture {
+  const w = size;
+  const h = Math.round(size / 2);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+
+  let seed = seedValue;
   const rand = () => {
     seed = (seed * 1664525 + 1013904223) % 4294967296;
     return seed / 4294967296;
   };
-  ctx.globalCompositeOperation = "source-over";
-  for (let i = 0; i < 90; i += 1) {
+
+  const count = Math.round(90 * density);
+  for (let i = 0; i < count; i += 1) {
     const cx = rand() * w;
-    const cy = h * (0.14 + rand() * 0.33);
+    const cy = h * (0.12 + rand() * 0.34);
     const scale = 0.4 + rand() * 1.5;
     const rx = h * 0.06 * scale;
     const ry = rx * (0.32 + rand() * 0.22);
-    const alpha = 0.1 + rand() * 0.3;
+    const alpha = 0.12 + rand() * 0.34;
     const puff = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
     puff.addColorStop(0, `rgba(255,255,255,${alpha})`);
     puff.addColorStop(0.55, `rgba(255,255,255,${alpha * 0.5})`);
@@ -95,6 +110,10 @@ function makeSkyTexture(palette: SkyPalette, size: number): THREE.Texture {
     ctx.restore();
   }
 
+  return finishTexture(canvas);
+}
+
+function finishTexture(canvas: HTMLCanvasElement): THREE.Texture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
@@ -108,8 +127,15 @@ function makeSkyTexture(palette: SkyPalette, size: number): THREE.Texture {
 
 export type Skybox = {
   mesh: THREE.Mesh;
-  /** keep the dome centred on the camera so it never gets clipped */
-  update: (cameraPos: THREE.Vector3) => void;
+  /**
+   * Keep the dome centred on the camera and advance the cloud drift.
+   * `dt` is seconds since the last frame.
+   */
+  update: (cameraPos: THREE.Vector3, dt: number) => void;
+  /** 0.5 (moody) – 1.8 (blown out); 1 = the authored sky */
+  setBrightness: (value: number) => void;
+  /** 0 = clouds frozen, 1 = default drift speed */
+  setCloudMotion: (value: number) => void;
   dispose: () => void;
 };
 
@@ -119,13 +145,22 @@ export type Skybox = {
  */
 export function addDaySkybox(
   scene: THREE.Scene,
-  opts: { radius?: number; textureSize?: number; palette?: SkyPalette } = {},
+  opts: {
+    radius?: number;
+    textureSize?: number;
+    palette?: SkyPalette;
+    brightness?: number;
+    /** cloud drift speed multiplier (0 = static) */
+    cloudMotion?: number;
+  } = {},
 ): Skybox {
   const radius = opts.radius ?? 900;
-  const texture = makeSkyTexture(opts.palette ?? DAY_SKY, opts.textureSize ?? 1024);
+  const size = opts.textureSize ?? 1024;
+  const skyTex = makeSkyTexture(opts.palette ?? DAY_SKY, size);
+
   const geo = new THREE.SphereGeometry(radius, 32, 20);
   const mat = new THREE.MeshBasicMaterial({
-    map: texture,
+    map: skyTex,
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
@@ -135,19 +170,73 @@ export function addDaySkybox(
   mesh.name = "DaySkybox";
   mesh.frustumCulled = false;
   mesh.renderOrder = -1000;
-  mesh.matrixAutoUpdate = true;
   scene.add(mesh);
+
+  // Two cloud sheets at slightly different speeds read as parallax without
+  // costing anything measurable (two unlit, depth-write-free spheres).
+  const layers: Array<{ mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; tex: THREE.Texture; speed: number }> = [];
+  const layerSpecs = [
+    { r: radius * 0.97, seed: 20260819, density: 1, speed: 0.0026, opacity: 1 },
+    { r: radius * 0.93, seed: 991733, density: 0.55, speed: 0.0045, opacity: 0.7 },
+  ];
+  for (const spec of layerSpecs) {
+    const tex = makeCloudTexture(size, spec.seed, spec.density);
+    const cmat = new THREE.MeshBasicMaterial({
+      map: tex,
+      side: THREE.BackSide,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      fog: false,
+      opacity: spec.opacity,
+    });
+    const cmesh = new THREE.Mesh(new THREE.SphereGeometry(spec.r, 24, 16), cmat);
+    cmesh.name = "DaySkyClouds";
+    cmesh.frustumCulled = false;
+    cmesh.renderOrder = -999;
+    scene.add(cmesh);
+    layers.push({ mesh: cmesh, mat: cmat, tex, speed: spec.speed });
+  }
+
+  let brightness = opts.brightness ?? 1;
+  let motion = opts.cloudMotion ?? 1;
+  const applyBrightness = () => {
+    mat.color.setScalar(brightness);
+    for (const l of layers) l.mat.color.setScalar(Math.min(1.4, brightness));
+  };
+  applyBrightness();
 
   return {
     mesh,
-    update: (cameraPos) => {
+    update: (cameraPos, dt) => {
       mesh.position.copy(cameraPos);
+      const step = Math.min(dt, 0.1) * motion;
+      for (const l of layers) {
+        l.mesh.position.copy(cameraPos);
+        if (step > 0) {
+          l.tex.offset.x = (l.tex.offset.x + l.speed * step) % 1;
+        }
+      }
+    },
+    setBrightness: (value) => {
+      brightness = Math.max(0.4, Math.min(2, value));
+      applyBrightness();
+    },
+    setCloudMotion: (value) => {
+      motion = Math.max(0, Math.min(3, value));
     },
     dispose: () => {
       scene.remove(mesh);
       geo.dispose();
       mat.dispose();
-      texture.dispose();
+      skyTex.dispose();
+      for (const l of layers) {
+        scene.remove(l.mesh);
+        l.mesh.geometry.dispose();
+        l.mat.dispose();
+        l.tex.dispose();
+      }
+      layers.length = 0;
     },
   };
 }
