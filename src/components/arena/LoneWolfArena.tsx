@@ -848,7 +848,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
       collisionDebugBuilt = true;
     };
     setCollisionDebugRef.current = (on: boolean) => {
-      if (on && !collisionDebugBuilt) buildCollisionDebug();
+      if (on) buildCollisionDebug();
       if (!on) clearCollisionDebug();
       collisionDebugGroup.visible = on;
     };
