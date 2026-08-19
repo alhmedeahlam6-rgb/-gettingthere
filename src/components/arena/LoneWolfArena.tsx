@@ -22,7 +22,8 @@ import { addDaySkybox, DAY_HORIZON, type Skybox } from "./skybox";
 import { createImpactFx, type ImpactFx } from "./impactFx";
 import { ARENA_MAPS, type MapId } from "./maps";
 import { saveMatchResult, getLeaderboard } from "@/lib/arena.functions";
-import { initSfx, playSfx, playSfxAt, playVictory, warmSfx, suspendSfx, resumeSfx, setSfxMuted, setSfxVolume } from "./sfx";
+import { initSfx, playSfx, playSfxAt, playVictory, warmSfx, suspendSfx, resumeSfx, setSfxMuted, setSfxVolume, setWeatherAmbience, stopWeatherAmbience, playThunder } from "./sfx";
+import { createWeather, type Weather } from "./weather";
 import SettingsPanel from "./SettingsPanel";
 import {
   AIM_ASSIST_STRENGTH,
@@ -1891,6 +1892,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     const groundBrightness = bootNum(bootSettings.groundBrightness, 1.25);
 
     let skybox: Skybox | null = null;
+    let weather: Weather | null = null;
+    let weatherApply: ((flash: number, wet: number) => void) | null = null;
     if (activeMap.id === "outpost") {
       skybox = addDaySkybox(scene, {
         radius: 900,
@@ -1910,6 +1913,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
        * strength and cloud drift all apply instantly, no reload needed.
        */
       applyAtmosphereRef.current = (sky, fog, clouds) => {
+        skyBrightnessRef.current = sky;
+        fogIntensityRef.current = fog;
         skybox?.setBrightness(sky);
         skybox?.setCloudMotion(clouds);
         if (fog <= 0.02) {
@@ -1922,6 +1927,32 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         dayFog.far = fogFar / Math.max(0.35, fog);
       };
       applyAtmosphereRef.current(skyBrightness, fogIntensity, cloudMotion);
+
+      /**
+       * Weather. Rain/snow are GPU-only (see weather.ts) and roll in on their
+       * own timer, so most of a match is clear and costs nothing. Lightning
+       * reuses the existing sky/fog uniforms for the flash — no extra lights,
+       * no material recompiles.
+       */
+      weather = createWeather(scene, initialQuality, {
+        onKind: (k) => {
+          if (k === "clear") stopWeatherAmbience();
+          else setWeatherAmbience(k, k === "rain" ? 0.32 : 0.16);
+        },
+        onThunder: (delay) => playThunder(delay, 0.65),
+      });
+      weatherApply = (flash, wet) => {
+        // darker, hazier sky while it pours; lightning briefly blows it out
+        const sky = skyBrightnessRef.current * (1 - wet * 0.32) + flash * 0.9;
+        skybox?.setBrightness(sky);
+        const fogMul = 1 + wet * 0.45;
+        const f = Math.max(0.35, fogIntensityRef.current) * fogMul;
+        if (scene.fog === dayFog) {
+          dayFog.near = fogNear / f;
+          dayFog.far = fogFar / f;
+          dayFog.color.setHex(DAY_HORIZON).lerp(WET_HORIZON, wet * 0.7).addScalar(flash * 0.25);
+        }
+      };
     }
 
     let boundsMinX = activeMap.bounds?.minX ?? -200;
@@ -2912,6 +2943,12 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         }
       }
 
+      if (weather) {
+        weather.update(camera.position, dt);
+        const wet = weather.kind() === "clear" ? 0 : 1;
+        weatherWet += (wet - weatherWet) * Math.min(1, dt * 0.35);
+        weatherApply?.(weather.flash(), weatherWet);
+      }
       skybox?.update(camera.position, dt);
       renderer.render(scene, camera);
 
@@ -2927,6 +2964,10 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
       disposed = true;
       skybox?.dispose();
       skybox = null;
+      weather?.dispose();
+      weather = null;
+      weatherApply = null;
+      stopWeatherAmbience();
       cancelWarm?.();
       cancelWarm = null;
       cancelAnimationFrame(raf);
