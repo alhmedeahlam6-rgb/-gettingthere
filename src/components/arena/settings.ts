@@ -164,6 +164,19 @@ export type ArenaSettings = {
   /** particle / impact FX density */
   particles: number;
 
+  /* ---- atmosphere (outdoor maps / day skybox) ---- */
+  /** exposure of the painted day sky: 0.5 moody → 1.8 blown out */
+  skyBrightness: number;
+  /** distance-haze strength; 0 = no fog, 1 = default, 2 = thick */
+  fogIntensity: number;
+  /** cloud drift speed multiplier; 0 = frozen sky */
+  cloudMotion: number;
+  /**
+   * Extra light folded into the level's baked vertex colours — mainly lifts
+   * the ground. Applies on the next map load.
+   */
+  groundBrightness: number;
+
   /* ---- gameplay ---- */
   /** shorter matches for casual sessions */
   quickMatch: boolean;
