@@ -880,6 +880,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         }),
       );
       boundsBox.position.set((boundsMinX + boundsMaxX) / 2, 6, (boundsMinZ + boundsMaxZ) / 2);
+      boundsBox.userData["debugOwned"] = true;
       collisionDebugGroup.add(boundsBox);
 
       const cage = spawnCageRef.current;
@@ -896,6 +897,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
           }),
         );
         cageBox.position.set(cage.center.x, cage.center.y + SPAWN_BOX_HEIGHT / 2, cage.center.z);
+        cageBox.userData["debugOwned"] = true;
         collisionDebugGroup.add(cageBox);
       }
 
@@ -2841,8 +2843,14 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
           }
 
 
+          const preClampX = walkPos.x;
+          const preClampZ = walkPos.z;
           walkPos.x = Math.max(boundsMinX, Math.min(boundsMaxX, walkPos.x));
           walkPos.z = Math.max(boundsMinZ, Math.min(boundsMaxZ, walkPos.z));
+          blockReasonRef.current =
+            Math.abs(preClampX - walkPos.x) > 1e-4 || Math.abs(preClampZ - walkPos.z) > 1e-4
+              ? "map bounds box"
+              : "";
 
           // during the buy phase you are locked inside your spawn cage
           const cage = spawnCageRef.current;
