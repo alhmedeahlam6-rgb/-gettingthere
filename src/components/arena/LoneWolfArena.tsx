@@ -2303,14 +2303,15 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         const box = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
         box.getSize(size);
-        if (!activeMap.bounds) {
+        if (!activeMap.bounds && !footprintOk) {
           const lim = Math.max(size.x, size.z) / 2 - 2;
           boundsMinX = -lim;
           boundsMaxX = lim;
           boundsMinZ = -lim;
           boundsMaxZ = lim;
         }
-        if (activeMap.bounds) {
+        if (activeMap.bounds || footprintOk) {
+
           radius = Math.max(boundsMaxX - boundsMinX, boundsMaxZ - boundsMinZ) * 0.8;
           target.set((boundsMinX + boundsMaxX) / 2, 6, (boundsMinZ + boundsMaxZ) / 2);
         } else {
