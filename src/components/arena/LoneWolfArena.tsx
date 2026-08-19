@@ -18,6 +18,7 @@ import { createPowerFx } from "./powerFx";
 import { bakeVertexLighting, makeBlobShadowTexture } from "./bakeLighting";
 import { loadCharacter } from "./characters";
 import { NO_EFFECT, POWERS } from "./powers";
+import { addDaySkybox, DAY_HORIZON, type Skybox } from "./skybox";
 import { createImpactFx, type ImpactFx } from "./impactFx";
 import { ARENA_MAPS, type MapId } from "./maps";
 import { saveMatchResult, getLeaderboard } from "@/lib/arena.functions";
@@ -1873,6 +1874,27 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     window.addEventListener("resize", onResize);
 
     const activeMap = ARENA_MAPS[mapIdRef.current];
+
+    /**
+     * Daytime sky dome. The 4v4 outpost is an open outdoor map with baked
+     * lighting, so a painted sky + matching haze makes it read much brighter
+     * without touching the light rig (one extra unlit draw call).
+     */
+    let skybox: Skybox | null = null;
+    if (activeMap.id === "outpost") {
+      skybox = addDaySkybox(scene, {
+        radius: 900,
+        textureSize: initialQuality === "low" ? 1024 : 2048,
+      });
+      scene.background = null;
+      renderer.setClearColor(DAY_HORIZON, 1);
+      scene.fog = new THREE.Fog(
+        DAY_HORIZON,
+        initialQuality === "low" ? 150 : 200,
+        initialQuality === "low" ? 480 : 700,
+      );
+    }
+
     let boundsMinX = activeMap.bounds?.minX ?? -200;
     let boundsMaxX = activeMap.bounds?.maxX ?? 200;
     let boundsMinZ = activeMap.bounds?.minZ ?? -200;
@@ -2856,6 +2878,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         }
       }
 
+      skybox?.update(camera.position);
       renderer.render(scene, camera);
 
     };
@@ -2868,6 +2891,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
 
     return () => {
       disposed = true;
+      skybox?.dispose();
+      skybox = null;
       cancelWarm?.();
       cancelWarm = null;
       cancelAnimationFrame(raf);
