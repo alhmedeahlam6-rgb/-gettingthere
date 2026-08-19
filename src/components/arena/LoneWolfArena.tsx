@@ -12,7 +12,7 @@ import {
   type CollisionTile,
 } from "./collision";
 
-import { Skull, Volume2, VolumeX, Maximize, Minimize, Settings, PawPrint, Wifi, Eye, Smile } from "lucide-react";
+import { Skull, Volume2, VolumeX, Maximize, Minimize, Settings, PawPrint, Wifi, Eye, Smile, Boxes, MousePointer2 } from "lucide-react";
 import { createSpawnFx, type SpawnFx } from "./spawnFx";
 import { createPowerFx } from "./powerFx";
 import { bakeVertexLighting, makeBlobShadowTexture } from "./bakeLighting";
