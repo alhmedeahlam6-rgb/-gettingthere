@@ -3281,6 +3281,19 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         </div>
       )}
 
+      {cursorFree && mode === "walk" && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-full border border-white/20 bg-black/55 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/80 backdrop-blur">
+          Mouse released · press ` or click the arena to aim again
+        </div>
+      )}
+
+      {collisionDebug && mode === "walk" && (
+        <div className="pointer-events-none absolute left-1/2 top-12 z-40 -translate-x-1/2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200 backdrop-blur">
+          Collision debug on (F9)
+        </div>
+      )}
+
+
       {status && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs uppercase tracking-[0.3em] text-muted-foreground">
           {status}
