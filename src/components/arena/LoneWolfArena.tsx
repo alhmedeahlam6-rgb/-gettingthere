@@ -322,6 +322,23 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
     setMuted(loaded.muted);
   }, []);
 
+  toggleCursorRef.current = () => {
+    const canvas = mountRef.current?.querySelector("canvas");
+    if (document.pointerLockElement === canvas) {
+      freeCursorRef.current = true;
+      setCursorFree(true);
+      document.exitPointerLock?.();
+    } else {
+      freeCursorRef.current = false;
+      setCursorFree(false);
+      canvas?.requestPointerLock?.();
+    }
+  };
+
+  useEffect(() => {
+    setCollisionDebugRef.current(collisionDebug);
+  }, [collisionDebug]);
+
   useEffect(() => {
     saveSettings(settings);
     setSfxVolume(settings.masterVolume * settings.sfxVolume);
