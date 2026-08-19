@@ -64,15 +64,15 @@ uniform float uIntensity;
 varying float vAlpha;
 
 void main() {
-  float half = uExtent * 0.5;
+  float hx = uExtent * 0.5;
   float drift = uTime * 1.0;
 
   // world-anchored wrap around the camera => real parallax, no CPU work
   float wx = aBase.x * uExtent + uWind.x * drift;
   float wz = aBase.z * uExtent + uWind.y * drift;
   vec3 p;
-  p.x = uCam.x + mod(wx - uCam.x + half, uExtent) - half;
-  p.z = uCam.z + mod(wz - uCam.z + half, uExtent) - half;
+  p.x = uCam.x + mod(wx - uCam.x + hx, uExtent) - hx;
+  p.z = uCam.z + mod(wz - uCam.z + hx, uExtent) - hx;
 
   float speed = uSpeed * (0.85 + aRand * 0.4);
   float fy = aBase.y * uHeight - uTime * speed;
@@ -125,14 +125,14 @@ uniform float uPixelRatio;
 varying float vAlpha;
 
 void main() {
-  float half = uExtent * 0.5;
+  float hx = uExtent * 0.5;
   float sway = sin(uTime * (0.5 + aRand * 0.9) + aRand * 31.4) * (0.6 + aRand);
   float wx = aBase.x * uExtent + uWind.x * uTime + sway;
   float wz = aBase.z * uExtent + uWind.y * uTime + cos(uTime * 0.4 + aRand * 12.0) * 0.6;
 
   vec3 p;
-  p.x = uCam.x + mod(wx - uCam.x + half, uExtent) - half;
-  p.z = uCam.z + mod(wz - uCam.z + half, uExtent) - half;
+  p.x = uCam.x + mod(wx - uCam.x + hx, uExtent) - hx;
+  p.z = uCam.z + mod(wz - uCam.z + hx, uExtent) - hx;
   float speed = uSpeed * (0.6 + aRand * 0.8);
   float fy = aBase.y * uHeight - uTime * speed;
   p.y = uCam.y + mod(fy - uCam.y + uHeight * 0.5, uHeight) - uHeight * 0.5;
