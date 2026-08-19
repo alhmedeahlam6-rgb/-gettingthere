@@ -2878,6 +2878,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline" }: 
         }
       }
 
+      skybox?.update(camera.position);
       renderer.render(scene, camera);
 
     };
